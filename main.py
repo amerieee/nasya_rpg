@@ -7,7 +7,7 @@ from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
 # -----------------------------
-# Мини-вебсервер для "поддержания жизни"
+# Flask сервер для "keep_alive"
 # -----------------------------
 app_web = Flask(__name__)
 
@@ -16,7 +16,6 @@ def home():
     return "Бот онлайн!"
 
 def run_web():
-    # В Replit обычно открыт порт 8080
     app_web.run(host="0.0.0.0", port=8080)
 
 def keep_alive():
@@ -25,20 +24,9 @@ def keep_alive():
     print("🌐 keep_alive запущен (Flask на :8080)")
 
 def start_autopinger():
-    """
-    Пингует публичный URL репла каждые ~4 минуты,
-    чтобы Replit не "засыпал", даже если UptimeRobot не настроен.
-    """
-    repl_owner = os.environ.get("REPL_OWNER")
-    repl_slug = os.environ.get("REPL_SLUG")
-    manual_url = os.environ.get("REPL_URL")  # можно задать руками в Secrets
-
-    if manual_url:
-        url = manual_url
-    elif repl_owner and repl_slug:
-        url = f"https://{repl_slug}.{repl_owner}.repl.co"
-    else:
-        print("⚠️ Не удалось определить публичный URL репла. Задай REPL_URL в Secrets.")
+    url = os.environ.get("REPL_URL")  # или задаём вручную в Secrets
+    if not url:
+        print("⚠️ Не найден REPL_URL. Автопингер не запущен.")
         return
 
     def _ping_loop():
@@ -59,7 +47,7 @@ hp = 0
 current_buttons = [["Доброе утро"]]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message and update.message.text is not None:
+    if update.message and update.message.text:
         await update.message.reply_text(
             "Привет! Я твой RPG-бот 🌞",
             reply_markup=ReplyKeyboardMarkup(current_buttons, one_time_keyboard=False)
@@ -68,7 +56,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def morning(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global hp, current_buttons
     hp = 0
-    if update.message and update.message.text is not None:
+    if update.message and update.message.text:
         await update.message.reply_text(
             "Настюшка идёт покорять мир! 🌞\nСколько у тебя энергии (HP) сегодня? Введи число от 0 до 100.",
             reply_markup=ReplyKeyboardRemove()
@@ -143,6 +131,9 @@ async def update_hp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             await update.message.reply_text("Введи число!")
 
+# -----------------------------
+# Запуск бота
+# -----------------------------
 def main():
     token = os.environ.get("TOKEN")
     if not token:
@@ -156,9 +147,12 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), update_hp))
 
     print("✅ Бот запущен! (long polling)")
-    app.run_polling(close_loop=False)  # не даём процессу падать при перезапуске цикла
+    app.run_polling()  # запускаем polling без старых устаревших параметров
 
+# -----------------------------
+# Точка входа
+# -----------------------------
 if __name__ == "__main__":
-    keep_alive()        # поднимаем Flask на :8080
-    start_autopinger()  # авто-пинг публичного URL
-    main()
+    keep_alive()        # Flask сервер для ping
+    start_autopinger()  # автопинг
+    Thread(target=main).start()  # бот в отдельном потоке
